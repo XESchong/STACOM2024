@@ -18,4 +18,5 @@ For running the label transformer network:
 1. Modify all paths in the "eval_model" section of LTN.py
 2. Create a new empty folder to store LTN's output
 3. Ensure your input is one-hot encoded
+4. Pretrained model: https://drive.google.com/file/d/10t4xQAuO0I69Czrt89-4ekJrP1POoVJ4/view?usp=drive_link
 
