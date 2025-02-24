@@ -6,7 +6,7 @@ For the toy case, we generated synthetic DICOM files (SAXs + LAXs) based on the 
 For running the slice shifting algorithm:
 1. Execute SSA.py with the toy example
 2. It will automatically calculate the in-plane shift based on the DICOM files from input data
-3. We have also included 3D sparse volume results in nifti format that show before and after SSA comparisons
+3. We have also included 3D sparse volume results in png format that show before and after SSA comparisons
 4. When applying SSA to realistic data, we have discovered a practical limitation: if the moving image (particularly near the apex area) contains insufficient information, it may cause unexpected behavior in SSA performance. In such cases, we recommend simply removing that slice from the SSA running
 5. SSA is also compatible with nifti file inputs
 
