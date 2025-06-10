@@ -3,6 +3,7 @@
 ########################################################################
 import pydicom
 from scipy.interpolate import RegularGridInterpolator
+# from motion_correction_function import apply_affine_transformation_data
 from SSA import apply_affine_transformation_data
 from skimage.measure import label
 import scipy
@@ -25,22 +26,24 @@ def getLargestCC(segmentation = None):
     largestCC = labels == np.argmax(np.bincount(labels.flat)[1:])+1
     return largestCC
 
-def gen_dicom(path = None, path_rotated = None, output_path = None, dicom_template_path = None):
+def gen_dicom(path = None, path_rotated = None, output_path = None, dicom_template_path = None, ccs_path = None, org_path = None):
 
     """
-    generate dicom file from dense data
+    generate dicom files from dense data (.nii.gz) with identity matrix as affine matrix (under cardiac coordinate system)
 
-    :path (str): the path of dense data
-    :path_rotated (str): the path of the folder containing rotated dense datas
-    :output_path (str): saving path for the synthetic dicom files
-    :dicom_template_path (str): dicom template from Sunnybrook Cardiac Data (SCD)
+    :path (str): the path of the folder containing dense data with identity matrix as affine matrix (under cardiac coordinate system)
+    :path_rotated (str): the path of the folder containing rotated dense data with identity matrix as affine matrix (under cardiac coordinate system)
+    :output_path (str): saving folder path for the synthetic dicom files
+    :dicom_template_path (str): dicom template file (.dcm) from Sunnybrook Cardiac Data (publicly available)
+    The following two paths are required if you would like to generate synthetic 3CH-LAX:
+    :ccs_path (str): the path of folder containing data with 'landmarks-defined' matrix as affine matrix (under cardiac coordinate system)
+    :org_path (str): the path of folder containing original data with more labels before cardiac coordinate transformation (at least include aorta label)
 
 
     :return: synthetic dicom files (2CH LAX, 3CH LAX , 4CH LAX and SAXs)
     """
 
-    rotation_data_path = os.path.join(path_rotated, os.path.basename(path))
-    dense_label_rotated = nib.load(rotation_data_path).get_fdata()
+    dense_label_rotated = nib.load(path_rotated).get_fdata()
     dense_label = nib.load(path).get_fdata()
     # label format: LVM-1, LV-2, RV-3, RA-4, LA-5
     seg_LV_tmp = (dense_label == 2).astype(dense_label.dtype)
@@ -163,21 +166,16 @@ def gen_dicom(path = None, path_rotated = None, output_path = None, dicom_templa
 
     data_name = os.path.basename(path)
     # find the aortic valve centroid from dense data with more labels (including aorta)
-    #################################################################################
-    # REMOVE 3CH-LAX generation if you do not have dense data containing aorta label!
     ##################################################################################
-    original_folder = '/path/to/folder/containing/dense/data/with/more/labels'
-    cardiac_folder = '/path/to/folder/containing/dense/data/with/more/labels/under/cardiac/coordinate/space'
-    ##################################################################################
-    # Modify this part based on your data name
+    # Modify this part based on your local data name
     ##################################################################################
     # original data means the dense data containing the aorta label (aorta label value: 6)
     original_data_name = data_name.replace('_cardiac_coordinate_space_id_affine', '')
     # cardiac data is the original data under defined cardiac coordinate space
     cardiac_data_name = data_name.replace('_id_affine', '')
 
-    original_path = os.path.join(original_folder, original_data_name)
-    cardiac_path = os.path.join(cardiac_folder, cardiac_data_name)
+    original_path = os.path.join(org_path, original_data_name)
+    cardiac_path = os.path.join(ccs_path, cardiac_data_name)
     original_data = nib.load(original_path).get_fdata()
     original_affine = nib.load(original_path).affine
     cardiac_affine = nib.load(cardiac_path).affine
@@ -431,11 +429,11 @@ def gen_dicom(path = None, path_rotated = None, output_path = None, dicom_templa
     vector_basal = coh - mvc
     distance_vec_basal = np.dot(vector_basal, plane_normal)
     ipp_basal = coh - distance_vec_basal * plane_normal
-    print('ipp_basal:' + str(ipp_basal))
+    # print('ipp_basal:' + str(ipp_basal))
     vector_apex = coh - apex
     distance_vec_apex = np.dot(vector_apex, plane_normal)
     ipp_apex = coh - distance_vec_apex * plane_normal
-    print('ipp_apex:' + str(ipp_apex))
+    # print('ipp_apex:' + str(ipp_apex))
 
     # calculate the max length between basal and apical
     max_length_lv = []
@@ -482,21 +480,17 @@ def gen_dicom(path = None, path_rotated = None, output_path = None, dicom_templa
         dataset.SpacingBetweenSlices = 1
         # random dropout the basal slice and apex slice
         if i == 0 and drop_out_val_apex:
-            output_file = os.path.join(output_loc + '/motion_free',
-                                       os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
-                                       + '_' + str(shift_pixel_2) + '_apex.nii.gz')
-            write_nifti(dataset, dicom_array, output_file)
-
+            dataset.save_as(
+                os.path.join(output_loc + '/motion_free', os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
+                             + '_' + str(shift_pixel_2) + '_apex.dcm'))
         elif i == number_of_slices and drop_out_val_basal:
-            output_file = os.path.join(output_loc + '/motion_free',
-                                       os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
-                                       + '_' + str(shift_pixel_2) + '_basal.nii.gz')
-            write_nifti(dataset, dicom_array, output_file)
+            dataset.save_as(
+                os.path.join(output_loc + '/motion_free', os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
+                             + '_' + str(shift_pixel_2) + '_basal.dcm'))
         elif 0 < i < number_of_slices and len(np.unique(motion_data)) != 1:
-            output_file = os.path.join(output_loc + '/motion_free',
-                                       os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
-                                       + '_' + str(shift_pixel_2) + '.nii.gz')
-            write_nifti(dataset, dicom_array, output_file)
+            dataset.save_as(
+                os.path.join(output_loc + '/motion_free', os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
+                             + '_' + str(shift_pixel_2) + '.dcm'))
 
         # motion_corrupted data saving
         shift_pixel_1 = int(np.random.normal(0, 3.5, 1)[0])
@@ -504,7 +498,7 @@ def gen_dicom(path = None, path_rotated = None, output_path = None, dicom_templa
         direction = np.array([shift_pixel_1, shift_pixel_2])
         motion_data = apply_affine_transformation_data(gt, direction)
         dicom_array = np.short(motion_data)
-        dataset.ImagePositionPatient = list(ipp)
+        dataset.ImagePositionPatient = list(points[0])
         dataset.ImageOrientationPatient = list(iop_one) + list(iop_two)
         dataset.PixelData = dicom_array.tobytes()
         dataset.PixelSpacing = [1, 1]
@@ -513,36 +507,33 @@ def gen_dicom(path = None, path_rotated = None, output_path = None, dicom_templa
         dataset.SpacingBetweenSlices = 1
         # random dropout the basal slice and apex slice
         if i == 0 and drop_out_val_apex:
-            output_file = os.path.join(output_loc + '/motion_corrupted',
-                                       os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
-                                       + '_' + str(shift_pixel_2) + '_apex.nii.gz')
+            dataset.save_as(
+                os.path.join(output_loc + '/motion_corrupted', os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
+                             + '_' + str(shift_pixel_2) + '_apex.dcm'))
             print(os.path.basename(path)[:6] + ':apex slices saved')
-            write_nifti(dataset, dicom_array, output_file)
 
         elif i == number_of_slices and drop_out_val_basal:
-            output_file = os.path.join(output_loc + '/motion_corrupted',
-                                       os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
-                                       + '_' + str(shift_pixel_2) + '_basal.nii.gz')
+            dataset.save_as(
+                os.path.join(output_loc + '/motion_corrupted', os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
+                             + '_' + str(shift_pixel_2) + '_basal.dcm'))
             print(os.path.basename(path)[:6] + ':basal slice saved')
-            write_nifti(dataset, dicom_array, output_file)
 
         elif 0 < i < number_of_slices and len(np.unique(motion_data)) != 1:
-            output_file = os.path.join(output_loc + '/motion_corrupted',
-                                       os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
-                                       + '_' + str(shift_pixel_2) + '.nii.gz')
-            write_nifti(dataset, dicom_array, output_file)
+            dataset.save_as(
+                os.path.join(output_loc + '/motion_corrupted', os.path.basename(path)[:6] + '_SAX_' + str(i + 1) + '_' + str(shift_pixel_1)
+                             + '_' + str(shift_pixel_2) + '.dcm'))
 
     return
 
 
-#######################################################################################
-# Step 1: Apply random rotation for the dense data (CT in the cardiac coordinate space)
-#######################################################################################
+################################################################################################################################
+# Step 1: Apply random rotation for the dense data with identity matrix as affine matrix (under the cardiac coordinate space)
+################################################################################################################################
 #######################################
 # MODIFY HERE
 #######################################
-dense_label_path = '/path/to/your/CT/data'
-output_path = '/save/path/to/your/rotated/CT/data'
+dense_label_path = '/path/to/your/folder/containing/dense/data'
+output_path = '/save/folder/path/to/your/rotated/dense/data'
 dense_data_ls = os.listdir(dense_label_path)
 count = 0
 
@@ -564,9 +555,9 @@ for i in tqdm(range(len(dense_data_ls))):
 
     nib.save(output_nifti, os.path.join(output_path, dense_data_ls[i]))
 
-#######################################################################################
-# Step 2: Generate synthetic dicom from rotated dense data
-#######################################################################################
+################################################################################################################################
+# Step 2: Generate synthetic dicom files from rotated dense data
+################################################################################################################################
 now = datetime.now()
 current_time = now.strftime("%H:%M:%S")
 print("Start Time =", current_time)
@@ -574,20 +565,24 @@ print("Start Time =", current_time)
 #######################################
 # MODIFY HERE
 #######################################
-dense_path = '/path/to/dense/data'
-rotated_dense_path = '/path/to/rotated/dense/data'
-output_dicom_path = '/save/path/to/synthetic/dicom'
+dense_path = '/path/to/your/folder/containing/dense/data'
+rotated_dense_path = '/path/to/your/folder/containing/rotated/dense/data'
+output_dicom_path = '/save/folder/path/to/synthetic/dicom'
 
 # Download link : https://www.cardiacatlas.org/sunnybrook-cardiac-data/
 # DICOM image batch 5 (6 cases) is used for the original code
-dicom_template_path = '/path/to/the/dicom/format/template'
+dicom_template_path = '/path/to/the/dicom/format/template.dcm'
+
+# for 3CH-LAX generation, we need the following two paths:
+# the affine matrix here is defined by the landmarks from the process of cardiac coordinate transformation
+ccs_data_path = '/path/to/your/folder/containing/dense/data/with/defined/affine/matrix'
+original_data_path = '/path/to/your/folder/containing/dense/data/before/cardiac/coordinate/transformation'
 
 data_list = sorted(os.listdir(rotated_dense_path))
-
 for k in tqdm(range(len(data_list))):
-    path = os.path.join(rotated_dense_path, data_list[k])
+    path = os.path.join(dense_path, data_list[k])
     rotated_path = os.path.join(rotated_dense_path, data_list[k])
-    gen_dicom(path, rotated_path, output_dicom_path, dicom_template_path)
+    gen_dicom(path, rotated_path, output_dicom_path, dicom_template_path, ccs_data_path, original_data_path)
 
 now = datetime.now()
 current_time = now.strftime("%H:%M:%S")
@@ -595,3 +590,90 @@ print("End Time =", current_time)
 print('#################################################################')
 print('synthetic dicom generation is finished')
 print('#################################################################')
+
+################################################################################################################################
+# Step 3: Resample synthetic 2D DICOMs into 3D sparse volume
+################################################################################################################################
+from SSA import extract_info
+import nibabel as nib
+from tqdm import tqdm
+from datetime import datetime
+import numpy as np
+import pydicom
+import os
+import random
+import torch
+
+now = datetime.now()
+current_time = now.strftime("%H:%M:%S")
+print("Start Time =", current_time)
+
+data_path = '/path/to/your/folder/containing/generated/dicom/files'
+output_path_motion_corrupted_data= '/saving/folder/path/to/motion/corrupted/3d/sparse/volume/'
+output_path_motion_free_data = '/saving/folder/path/to/motion/free/3d/sparse/volume/'
+if not os.path.exists(output_path_motion_corrupted_data):
+    os.makedirs(output_path_motion_corrupted_data)
+if not os.path.exists(output_path_motion_free_data):
+    os.makedirs(output_path_motion_free_data)
+data_list = sorted(os.listdir(data_path))
+
+for d in tqdm(range(len(data_list))):
+    print("\n" + data_list[d])
+    data_motion_path = os.path.join(data_path, data_list[d])
+    dicom_path_list = os.listdir(data_motion_path)
+    for m in range(len(dicom_path_list)):
+        dicom_path = os.path.join(data_motion_path, dicom_path_list[m])
+        dicom_files = os.listdir(dicom_path)
+        final_3d_sparse_vol = np.zeros((160, 160, 160))
+        for i in range(len(dicom_files)):
+            dicom_path_each = os.path.join(dicom_path, dicom_files[i])
+            dicom_info_list = extract_info(dicom_path_each)
+            data_array = dicom_info_list[0]
+            data_affine = dicom_info_list[1]
+            thickness = 2
+            data_with_thickness = np.zeros((thickness, data_array.shape[0], data_array.shape[1]))
+            data_with_thickness[:, ...] = data_array
+            affine_with_thickness = np.zeros(data_affine.shape)
+            affine_with_thickness[data_affine != 0] = data_affine[data_affine != 0]
+            ijk_index = (np.array(
+                np.meshgrid(np.arange(0, 160), np.arange(0, 160), np.arange(0, 160), indexing='ij')).T.reshape(160,
+                                                                                                               160,
+                                                                                                               160,
+                                                                                                               3))
+            ijk_mtx = np.zeros((160, 160, 160, 4))
+            ijk_mtx[:, :, :, :3] = ijk_index
+            ijk_mtx[:, :, :, -1] = 1
+            ijk_mtx = ijk_mtx.T.reshape(4, 160 ** 3)
+            affine_sparse = np.eye(4)
+            affine_inter = np.dot(np.linalg.inv(data_affine), affine_sparse)
+            xyz_index_temp = np.dot(affine_inter, ijk_mtx)
+            xyz_index = xyz_index_temp[:3, :].reshape(3, 160, 160, 160).T
+            input_tensor = torch.from_numpy(
+                data_with_thickness.reshape((1, 1, data_with_thickness.shape[0], data_with_thickness.shape[1],
+                                             data_with_thickness.shape[2])))
+            grid = torch.from_numpy(xyz_index.reshape((1, 160, 160, 160, 3))).type(torch.DoubleTensor)
+            norm_factor_0 = (input_tensor.shape[2] - 1) / 2
+            norm_factor_1 = (input_tensor.shape[3] - 1) / 2
+            norm_factor_2 = (input_tensor.shape[4] - 1) / 2
+            grid[0, :, :, :, 0] = (grid[0, :, :, :, 0] - norm_factor_2) / (norm_factor_2 + 0.5)
+            grid[0, :, :, :, 1] = (grid[0, :, :, :, 1] - norm_factor_1) / (norm_factor_1 + 0.5)
+            grid[0, :, :, :, 2] = (grid[0, :, :, :, 2] - norm_factor_0) / (norm_factor_0 + 0.5)
+            tmp_img = torch.nn.functional.grid_sample(input_tensor, grid, mode='nearest', padding_mode='zeros',
+                                            align_corners=False)[0, 0, ...].numpy()
+
+            final_3d_sparse_vol = np.maximum(tmp_img, final_3d_sparse_vol)
+
+        if 'corrupted' in dicom_path_list[m]:
+            label_nifti = nib.Nifti1Image(np.transpose(final_3d_sparse_vol), affine=np.eye(4))
+            nib.save(label_nifti, os.path.join(output_path_motion_corrupted_data, data_list[d] + '.nii.gz'))
+        else:
+
+            label_nifti = nib.Nifti1Image(np.transpose(final_3d_sparse_vol), affine=np.eye(4))
+            nib.save(label_nifti, os.path.join(output_path_motion_free_data, data_list[d] + '.nii.gz'))
+
+now = datetime.now()
+current_time = now.strftime("%H:%M:%S")
+print("End Time =", current_time)
+
+
+
