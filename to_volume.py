@@ -69,7 +69,7 @@ for d in tqdm(range(len(data_list))):
         # elementwise maximisation for each resampled 2D slice
         final_3d_sparse_vol = np.maximum(tmp_img, final_3d_sparse_vol)
     # save the final 3D sparse volume as NIFTI format
-    final_nifti = nib.Nifti1Image(final_3d_sparse_vol, affine=np.eye(4))
+    final_nifti = nib.Nifti1Image(np.transpose(final_3d_sparse_vol), affine=np.eye(4))
     nib.save(final_nifti, os.path.join(output_path, data_list[d] + '.nii.gz'))
 
 now = datetime.now()
