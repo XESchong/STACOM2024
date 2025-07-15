@@ -14,7 +14,7 @@ For running the spatial transformer network:
 1. You will need to update the paths in both the "pred" section and main part of STN.py
 2. Make sure your input is one-hot encoded
 3. Given the input, We offer two different versions for the STN, i.e., Sparse STN (SSTN) and Dense STN (DSTN).
-4. Pretrained model (SSTN and DSTN): https://drive.google.com/file/d/1058B1ZjqTGwS9KsizbSXA8wMIvO2C1n2/view?usp=sharing
+4. Pretrained model (SSTN and DSTN): https://drive.google.com/drive/folders/1HPrmC5K4nSPUX1n5qDmBEHkNTH4GPXzs?usp=sharing
 
 For running the label transformer network:
 1. Modify all paths in the "eval_model" section of LTN.py
