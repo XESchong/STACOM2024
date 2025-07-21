@@ -230,10 +230,10 @@ now = datetime.now()
 current_time = now.strftime("%H:%M:%S")
 print("Start Time =", current_time)
 
-input_path = '/home/yx22/Downloads/Test'
-output_path_id_aff = '/home/yx22/Downloads/3d_sparse_id_affine'
+input_path = '/local/path/to/toy_data'
+output_path_id_aff = '/local/path/to/sparse_3D_id_affine'
 os.makedirs(output_path_id_aff , exist_ok=True)
-output_path_new_aff = '/home/yx22/Downloads/3d_sparse_new_affine'
+output_path_new_aff = '/local/path/to/sparse_3D_new_affine'
 os.makedirs(output_path_new_aff , exist_ok=True)
 data_list = sorted(os.listdir(input_path))
 
